@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import type { WifiPoint } from '../../shared/types/wifi';
+import type { WifiPoint } from '../../utils/types/wifi';
 
 interface WifiListProps {
   wifiPoints: WifiPoint[];

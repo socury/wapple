@@ -1,4 +1,4 @@
-import type { Location } from '../types/location';
+import type { Location } from '../utils/types/location';
 
 export const getCurrentLocation = (): Promise<Location> => {
   return new Promise((resolve, reject) => {

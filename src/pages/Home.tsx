@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { I18nProvider } from './providers/I18nProvider';
-import { Header } from '../widgets/header/Header';
-import { MapWidget } from '../widgets/map/MapWidget';
-import { SearchLocation } from '../features/search-location/SearchLocation';
-import { WifiList } from '../features/wifi-list/WifiList';
-import { wifiApi } from '../shared/api/wifiApi';
-import type { Location } from '../shared/types/location';
-import type { WifiPoint } from '../shared/types/wifi';
+import { Header } from '../components/header/Header';
+import { MapWidget } from '../components/map/MapWidget';
+import { SearchLocation } from '../components/search/SearchLocation';
+import { WifiList } from '../components/wifi-list/WifiList';
+import { wifiApi } from '../libs/wifiApi';
+import type { Location } from '../utils/types/location';
+import type { WifiPoint } from '../utils/types/wifi';
 
-const AppContent: React.FC = () => {
+export const Home: React.FC = () => {
   const [location, setLocation] = useState<Location>({
     latitude: 37.5665,
     longitude: 126.9780,
@@ -89,13 +88,5 @@ const AppContent: React.FC = () => {
         </div>
       </div>
     </div>
-  );
-};
-
-export const App: React.FC = () => {
-  return (
-    <I18nProvider>
-      <AppContent />
-    </I18nProvider>
   );
 };

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input, Button } from '../../shared/ui';
-import { getCurrentLocation } from '../../shared/lib/geolocation';
-import type { Location } from '../../shared/types/location';
+import { getCurrentLocation } from '../../hooks/geolocation';
+import type { Location } from '../../utils/types/location';
 
 interface SearchLocationProps {
   onLocationSelect: (location: Location) => void;
@@ -54,24 +53,28 @@ export const SearchLocation: React.FC<SearchLocationProps> = ({ onLocationSelect
   return (
     <div className="flex flex-col gap-3 w-full">
       <div className="flex gap-2">
-        <Input
+        <input
+          type="text"
           value={searchQuery}
-          onChange={setSearchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={t('searchPlaceholder')}
-          className="flex-1"
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
         />
-        <Button onClick={handleSearch} variant="primary">
+        <button
+          onClick={handleSearch}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+        >
           {t('search')}
-        </Button>
+        </button>
       </div>
-      <Button
+      <button
         onClick={handleCurrentLocation}
-        variant="outline"
         disabled={isLoading}
-        className="w-full"
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         📍 {isLoading ? t('loading') : t('currentLocation')}
-      </Button>
+      </button>
     </div>
   );
 };

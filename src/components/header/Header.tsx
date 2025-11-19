@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { LanguageSwitcher } from '../../features/language-switcher/LanguageSwitcher';
+import { LanguageSwitcher } from '../language-switcher/LanguageSwitcher';
 
 export const Header: React.FC = () => {
   const { t } = useTranslation();

@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { config } from '../config/env';
-import type { WifiPoint } from '../types/wifi';
+import { config } from './env';
+import type { WifiPoint } from '../utils/types/wifi';
 
 // 공공와이파이 OpenAPI 엔드포인트
 // 개발 환경: /api/wapple -> vite proxy -> https://www.wififree.kr/getApList.do
@@ -130,8 +130,8 @@ export const fetchNearbyWifi = async (lat: number, lng: number, radius: number):
       }
 
       // API 응답을 WifiPoint 형식으로 변환
-      const wifiPoints: WifiPoint[] = apList.list
-        .map((item) => {
+      const wifiPoints = apList.list
+        .map((item): WifiPoint | null => {
           const itemLat = item.LAT;
           const itemLng = item.LON;
           
@@ -158,7 +158,6 @@ export const fetchNearbyWifi = async (lat: number, lng: number, radius: number):
             installationType: '공공 WiFi',
             installationFloor: '정보 없음',
             serviceType: '무료 공공 WiFi',
-            installDate: undefined,
           };
         })
         .filter((item): item is WifiPoint => item !== null);

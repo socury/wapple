@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTranslation } from 'react-i18next';
-import type { WiFiPoint } from '../../shared/types/wifi';
-import { config } from '../../shared/config/env';
+import type { WifiPoint } from '../../utils/types/wifi';
+import { config } from '../../libs/env';
 
 mapboxgl.accessToken = config.mapboxToken;
 
@@ -12,7 +12,7 @@ interface MapWidgetProps {
     latitude: number;
     longitude: number;
   };
-  wifiPoints: WiFiPoint[];
+  wifiPoints: WifiPoint[];
   radius: number;
   onRefreshLocation?: (location: { latitude: number; longitude: number }) => void;
 }
@@ -22,7 +22,7 @@ export const MapWidget: React.FC<MapWidgetProps> = ({ location, wifiPoints, radi
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<mapboxgl.Marker[]>([]);
-  const [selectedWifi, setSelectedWifi] = useState<WiFiPoint | null>(null);
+  const [selectedWifi, setSelectedWifi] = useState<WifiPoint | null>(null);
 
   const handleRefreshCurrentView = () => {
     if (map.current && onRefreshLocation) {
