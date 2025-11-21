@@ -1,11 +1,37 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import type { WifiPoint } from '../../utils/types/wifi';
+import type { SavedWifiEntry } from '../../utils/types/savedWifi';
 import { config } from '../../libs/env';
 
 mapboxgl.accessToken = config.mapboxToken;
+
+const ROUTE_SOURCE_ID = 'location-to-wifi-route';
+const ROUTE_LAYER_ID = 'location-to-wifi-route-line';
+
+const createLocationMarkerElement = () => {
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <svg width="32" height="32" viewBox="0 0 24 24" style="fill:#2563eb;filter:drop-shadow(0 6px 10px rgba(0,0,0,0.35));">
+      <path d="M12 2l4.5 13.5L12 13l-4.5 2.5L12 2z" />
+    </svg>
+  `;
+  return el;
+};
+
+const createWifiMarkerElement = (isSaved: boolean) => {
+  const el = document.createElement('div');
+  el.className = `w-6 h-6 rounded-full border-2 shadow-lg cursor-pointer transition-colors ${
+    isSaved
+      ? 'bg-yellow-400 border-yellow-200 hover:bg-yellow-500'
+      : 'bg-blue-500 border-white hover:bg-blue-600'
+  }`;
+  return el;
+};
+
 
 interface MapWidgetProps {
   location: {
@@ -15,14 +41,40 @@ interface MapWidgetProps {
   wifiPoints: WifiPoint[];
   radius: number;
   onRefreshLocation?: (location: { latitude: number; longitude: number }) => void;
+  selectedWifi?: WifiPoint | null;
+  onWifiSelect?: (wifi: WifiPoint | null) => void;
+  savedWifiEntries?: SavedWifiEntry[];
 }
 
-export const MapWidget: React.FC<MapWidgetProps> = ({ location, wifiPoints, radius, onRefreshLocation }) => {
+export const MapWidget: React.FC<MapWidgetProps> = ({
+  location,
+  wifiPoints,
+  radius,
+  onRefreshLocation,
+  selectedWifi,
+  onWifiSelect,
+  savedWifiEntries,
+}) => {
   const { t } = useTranslation();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<mapboxgl.Marker[]>([]);
-  const [selectedWifi, setSelectedWifi] = useState<WifiPoint | null>(null);
+  const savedMarkers = useRef<mapboxgl.Marker[]>([]);
+  const locationMarker = useRef<mapboxgl.Marker | null>(null);
+  const [internalSelectedWifi, setInternalSelectedWifi] = useState<WifiPoint | null>(null);
+  const [isMapReady, setIsMapReady] = useState(false);
+  const [routeFeature, setRouteFeature] = useState<GeoJSON.Feature<GeoJSON.LineString> | null>(null);
+  const savedWifiIds = useMemo(() => new Set(savedWifiEntries?.map((entry) => entry.id) ?? []), [savedWifiEntries]);
+
+  const activeSelectedWifi = selectedWifi ?? internalSelectedWifi;
+
+  const handleWifiSelection = (wifi: WifiPoint | null) => {
+    if (onWifiSelect) {
+      onWifiSelect(wifi);
+    } else {
+      setInternalSelectedWifi(wifi);
+    }
+  };
 
   const handleRefreshCurrentView = () => {
     if (map.current && onRefreshLocation) {
@@ -37,21 +89,28 @@ export const MapWidget: React.FC<MapWidgetProps> = ({ location, wifiPoints, radi
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    map.current = new mapboxgl.Map({
+    const mapInstance = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v12',
       center: [location.longitude, location.latitude],
-      zoom: 13
+      zoom: 13,
+      language:"ko"
     });
 
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.current = mapInstance;
+
+    mapInstance.addControl(new mapboxgl.NavigationControl(), 'top-right');
     const geolocate = new mapboxgl.GeolocateControl({
       positionOptions: {
         enableHighAccuracy: true
       },
       trackUserLocation: true
     });
-    map.current.addControl(geolocate, 'top-right');
+    mapInstance.addControl(geolocate, 'top-right');
+
+    mapInstance.on('load', () => {
+      setIsMapReady(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -64,13 +123,39 @@ export const MapWidget: React.FC<MapWidgetProps> = ({ location, wifiPoints, radi
   }, [location]);
 
   useEffect(() => {
+    if (!map.current || !isMapReady) return;
+
+    if (!locationMarker.current) {
+      locationMarker.current = new mapboxgl.Marker(createLocationMarkerElement(), { anchor: 'bottom' })
+        .setLngLat([location.longitude, location.latitude])
+        .addTo(map.current);
+      return;
+    }
+
+    locationMarker.current.setLngLat([location.longitude, location.latitude]);
+  }, [location, isMapReady]);
+
+  useEffect(() => {
+    return () => {
+      locationMarker.current?.remove();
+      locationMarker.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      savedMarkers.current.forEach((marker) => marker.remove());
+      savedMarkers.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
     markers.current.forEach(marker => marker.remove());
     markers.current = [];
 
     wifiPoints.forEach(wifi => {
-      const el = document.createElement('div');
-      el.className = 'w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg cursor-pointer hover:bg-blue-600';
-      el.onclick = () => setSelectedWifi(wifi);
+      const el = createWifiMarkerElement(savedWifiIds.has(wifi.id));
+      el.onclick = () => handleWifiSelection(wifi);
 
       const marker = new mapboxgl.Marker(el)
         .setLngLat([wifi.longitude, wifi.latitude])
@@ -78,7 +163,168 @@ export const MapWidget: React.FC<MapWidgetProps> = ({ location, wifiPoints, radi
       
       markers.current.push(marker);
     });
-  }, [wifiPoints]);
+  }, [wifiPoints, savedWifiIds]);
+
+  useEffect(() => {
+    if (!map.current) return;
+
+    savedMarkers.current.forEach(marker => marker.remove());
+    savedMarkers.current = [];
+
+    if (!savedWifiEntries?.length) return;
+
+    const existingWifiIds = new Set(wifiPoints.map((wifi) => wifi.id));
+
+    savedWifiEntries.forEach((entry) => {
+      if (existingWifiIds.has(entry.id)) {
+        return;
+      }
+
+      const el = createWifiMarkerElement(true);
+      el.onclick = () => handleWifiSelection(entry.wifi);
+
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat([entry.wifi.longitude, entry.wifi.latitude])
+        .addTo(map.current!);
+
+      savedMarkers.current.push(marker);
+    });
+  }, [savedWifiEntries, wifiPoints]);
+
+  useEffect(() => {
+    if (!activeSelectedWifi) {
+      setRouteFeature(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const fetchRoute = async () => {
+      try {
+        const coordinates = [
+          [location.longitude, location.latitude],
+          [activeSelectedWifi.longitude, activeSelectedWifi.latitude],
+        ];
+        const coordString = coordinates.map(([lng, lat]) => `${lng},${lat}`).join(';');
+        const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${coordString}`;
+        const res = await axios.get(url, {
+          params: {
+            alternatives: true,
+            geometries: 'geojson',
+            overview: 'full',
+            steps: true,
+            language: 'ko',
+            access_token: mapboxgl.accessToken,
+          },
+        });
+
+        if (isCancelled) return;
+
+        const geo = res.data?.routes?.[0]?.geometry as GeoJSON.LineString | undefined;
+        if (geo) {
+          setRouteFeature({
+            type: 'Feature',
+            geometry: geo,
+            properties: {},
+          });
+          return;
+        }
+
+        setRouteFeature({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates,
+          },
+          properties: {},
+        });
+      } catch (error) {
+        console.error('Failed to fetch walking route', error);
+        if (isCancelled) return;
+        setRouteFeature({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [location.longitude, location.latitude],
+              [activeSelectedWifi.longitude, activeSelectedWifi.latitude],
+            ],
+          },
+          properties: {},
+        });
+      }
+    };
+
+    fetchRoute();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeSelectedWifi, location.latitude, location.longitude]);
+
+  useEffect(() => {
+    if (!map.current || !isMapReady) return;
+
+    const mapInstance = map.current;
+
+    if (!routeFeature) {
+      if (mapInstance.getLayer(ROUTE_LAYER_ID)) {
+        mapInstance.removeLayer(ROUTE_LAYER_ID);
+      }
+      if (mapInstance.getSource(ROUTE_SOURCE_ID)) {
+        mapInstance.removeSource(ROUTE_SOURCE_ID);
+      }
+      return;
+    }
+
+    const existingSource = mapInstance.getSource(ROUTE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+
+    if (existingSource) {
+      existingSource.setData(routeFeature);
+    } else {
+      mapInstance.addSource(ROUTE_SOURCE_ID, {
+        type: 'geojson',
+        data: routeFeature,
+      });
+
+      mapInstance.addLayer({
+        id: ROUTE_LAYER_ID,
+        type: 'line',
+        source: ROUTE_SOURCE_ID,
+        layout: {
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
+        paint: {
+          'line-color': '#2563eb',
+          'line-width': 4,
+          'line-opacity': 0.7,
+        },
+      });
+    }
+  }, [routeFeature, isMapReady]);
+
+  useEffect(() => {
+    return () => {
+      if (!map.current) return;
+      if (map.current.getLayer(ROUTE_LAYER_ID)) {
+        map.current.removeLayer(ROUTE_LAYER_ID);
+      }
+      if (map.current.getSource(ROUTE_SOURCE_ID)) {
+        map.current.removeSource(ROUTE_SOURCE_ID);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!map.current || !activeSelectedWifi) return;
+
+    const bounds = new mapboxgl.LngLatBounds();
+    bounds.extend([location.longitude, location.latitude]);
+    bounds.extend([activeSelectedWifi.longitude, activeSelectedWifi.latitude]);
+
+    map.current.fitBounds(bounds, { padding: 80, duration: 800 });
+  }, [activeSelectedWifi, location]);
 
   return (
     <div className="relative h-full w-full">
@@ -106,46 +352,6 @@ export const MapWidget: React.FC<MapWidgetProps> = ({ location, wifiPoints, radi
         </svg>
         <span className="hidden sm:inline">{t('refreshCurrentView')}</span>
       </button>
-
-      {selectedWifi && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white p-6 rounded-lg shadow-xl z-20 max-w-md w-full mx-4">
-          <button 
-            onClick={() => setSelectedWifi(null)}
-            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 text-xl"
-          >
-            ✕
-          </button>
-          <h3 className="text-lg font-bold mb-3 pr-6">{selectedWifi.name}</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-start">
-              <span className="font-semibold min-w-[100px]">{t('address')}:</span>
-              <span className="text-gray-700 flex-1">{selectedWifi.address}</span>
-            </div>
-            <div className="flex items-start">
-              <span className="font-semibold min-w-[100px]">{t('provider')}:</span>
-              <span className="text-gray-700 flex-1">{selectedWifi.provider}</span>
-            </div>
-            {selectedWifi.installationType && (
-              <div className="flex items-start">
-                <span className="font-semibold min-w-[100px]">{t('installationType')}:</span>
-                <span className="text-gray-700 flex-1">{selectedWifi.installationType}</span>
-              </div>
-            )}
-            {selectedWifi.installationFloor && (
-              <div className="flex items-start">
-                <span className="font-semibold min-w-[100px]">{t('installationFloor')}:</span>
-                <span className="text-gray-700 flex-1">{selectedWifi.installationFloor}</span>
-              </div>
-            )}
-            {selectedWifi.serviceType && (
-              <div className="flex items-start">
-                <span className="font-semibold min-w-[100px]">{t('serviceType')}:</span>
-                <span className="text-gray-700 flex-1">{selectedWifi.serviceType}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

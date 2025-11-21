@@ -12,6 +12,12 @@ export const LanguageSwitcher: React.FC = () => {
   ];
 
   const handleLanguageChange = (lang: Locale) => {
+    // persist selection and tell i18n to change
+    try {
+      localStorage.setItem('appLanguage', lang);
+    } catch (err) {
+      // ignore localStorage errors (e.g., SSR or privacy settings)
+    }
     i18n.changeLanguage(lang);
   };
 
