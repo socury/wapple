@@ -11,9 +11,9 @@ export const Header: React.FC = () => {
   return (
     <header className="bg-white shadow-md">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-blue-600">
+        <Link to="/" className="text-2xl font-bold text-blue-600 hover:text-blue-700 transition-colors">
           📶 {t('title')}
-        </h1>
+        </Link>
         <LanguageSwitcher />
         <div className="ml-4 flex items-center gap-3">
           {user ? (
